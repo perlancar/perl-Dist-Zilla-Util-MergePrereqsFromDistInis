@@ -9,11 +9,11 @@ use warnings;
 
 require Exporter;
 our @ISA       = qw(Exporter);
-our @EXPORT_OK = qw(parse_prereqs_from_dist_ini);
+our @EXPORT_OK = qw(merge_prereqs_from_dist_inis);
 
 our %SPEC;
 
-$SPEC{merge_prereqs_from_dist_ini} = {
+$SPEC{merge_prereqs_from_dist_inis} = {
     v => 1.1,
     summary => "Merge prereqs from several dzil dist.ini's",
     description => <<'_',
@@ -45,10 +45,6 @@ sub merge_prereqs_from_dist_inis {
 
     my %args = @_;
 
-    my $reader = Config::IOD::Reader->new(
-        ignore_unknown_directive => 1,
-    );
-
     my @prereqs_list;
     if ($args{paths}) {
         push @prereqs_list, Dist::Zilla::Util::ParsePrereqsFromDistIni::parse_prereqs_from_dist_ini(path=>$_)
@@ -68,7 +64,10 @@ sub merge_prereqs_from_dist_inis {
             for my $rel (keys %$phase_prereqs) {
                 my $mods = $phase_prereqs->{$rel};
                 for my $mod (keys %$mods) {
-                    $res->{$phase}{$rel}{$mod} = $mods->{$mod};
+                    $res->{$phase}{$rel}{$mod} = $mods->{$mod}
+                        unless exists($res->{$phase}{$rel}{$mod}) &&
+                        version->parse($res->{$phase}{$rel}{$mod}) >
+                        version->parse($mods->{$mod});
                 }
             }
         }
@@ -79,8 +78,8 @@ sub merge_prereqs_from_dist_inis {
         my $phase_res = $res->{$phase};
         my $suggests = $phase_res->{suggests} or next;
         for my $mod (keys %$suggests) {
-            delete $suggests->{$mod} if $res->{$phase}{recommends}{$mod};
-            delete $suggests->{$mod} if $res->{$phase}{requires}{$mod};
+            delete $suggests->{$mod} if $phase_res->{recommends}{$mod};
+            delete $suggests->{$mod} if $phase_res->{requires}{$mod};
         }
     }
 
@@ -89,7 +88,7 @@ sub merge_prereqs_from_dist_inis {
         my $phase_res = $res->{$phase};
         my $recommends = $phase_res->{recommends} or next;
         for my $mod (keys %$recommends) {
-            delete $recommends->{$mod} if $res->{$phase}{requires}{$mod};
+            delete $recommends->{$mod} if $phase_res->{requires}{$mod};
         }
     }
 
